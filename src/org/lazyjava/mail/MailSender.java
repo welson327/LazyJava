@@ -6,13 +6,13 @@ import java.io.FileNotFoundException;
 import javax.mail.MessagingException;
 
 public class MailSender {
-	private static final String SMTP = "smtp.yiabi.com.tw";
-	private static final String POP3 = "pop3.yiabi.com.tw";
-	private static final String SENDER = "service@yiabi.com.tw";
-	private static final String SENDER_NAME = "Yiabi";//"Yiabi客服中心"
+	private static final String SMTP = "smtp.lazyjava.org";
+	private static final String POP3 = "pop3.lazyjava.org";
+	private static final String SENDER = "service@lazyjava.org";
+	private static final String SENDER_NAME = "LazyJava Customer Service";//"客服中心"
 	
-	private static final String MAIL_HOST_USERNAME = "service";
-	private static final String MAIL_HOST_PASSWORD = "6yhn*IK<";
+	private static final String MAIL_HOST_USERNAME = "lazyjava";
+	private static final String MAIL_HOST_PASSWORD = "lazyjava";
 	
 	private MailBox mailBox = null;
 	private String senderEmail = "";

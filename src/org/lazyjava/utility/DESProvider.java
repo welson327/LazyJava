@@ -16,7 +16,7 @@ public class DESProvider {
     private KeySpec keySpec = null;
     private SecretKeyFactory keyFactory = null;
     private Cipher cipher = null;
-    private String encryptionKey = "MRX3F47B-9T2487JK-WKMFRPWB";
+    private String encryptionKey = "mRX3F74b-9t2487Jk-2nMfRPWb";
     private SecretKey key = null;
 
     public DESProvider() {
