@@ -7,8 +7,6 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.TimeZone;
 
-import org.json.JSONException;
-
 public class TimeStamp 
 {
 	public static String getTimeStamp(String separater, boolean zero_padding) {
