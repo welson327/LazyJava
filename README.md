@@ -1,20 +1,20 @@
 LazyJava is a code for developer to use easily. This package includes:
 
-1. Servlet example
+#### 1. Servlet example
 
-2. Database adapter 
+#### 2. Database adapter 
 (1) Mongo java adapter by using mongo-java-driver.jar 
 (2) Redis java adapter by using jedis.jar
 
-3. Guava-Cache provider
+#### 3. Guava-Cache provider
 
-4. Jobs 
+#### 4. Jobs 
 (1) Common job task queue by using BlockingQueue of java
 
-5. Mail 
+#### 5. Mail 
 (1) Send-email-example by using javax.mail.Transport
 
-6. Util
+#### 6. Util
  + AESProvider: util for aes encryption
  + ChineseConverter: Chinese traditional/simplified converter
  + CommonCompressUtil: util for uncompress zip file
