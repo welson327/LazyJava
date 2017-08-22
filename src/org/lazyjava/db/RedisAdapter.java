@@ -8,80 +8,66 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 
 public class RedisAdapter {
-	//protected final String _QUERYRESULT_ = "queryResult";
+	protected static final int DEF_POOL_SIZE = -1; // not use pool
+	
 	protected JedisPool jedisPool = null;
+	protected Jedis jedis = null;
 	
 	protected String host = "localhost";
 	protected int port = 6379;
-	
-	private String namespace = "";
-	protected Jedis jedis = null;
-	private boolean autoCloseConnection = true;
-	private boolean useConnPool = true;
-/*
-	private static MongoClientOptions mongoClientOptions = null;
-	static {
-		//http://api.mongodb.org/java/2.6/com/mongodb/MongoOptions.html
-		mongoClientOptions = MongoClientOptions.builder()
-			.autoConnectRetry(true)
-            //.connectionsPerHost(100)
-			//.connectTimeout(5000) 	// v2.6: 0 is default and infinite
-			.cursorFinalizerEnabled(false) // fix: "MongoCleaner" waiting on condition (at com.mongodb.Mongo$CursorCleanerThread.run(Mongo.java:773))
-            //.maxWaitTime(5000) 	// v2.6: Default is 120,000
-            //.socketTimeout(5000)  	// v2.6: 0 is default and infinite
-            //.threadsAllowedToBlockForConnectionMultiplier(5000)
-            .build();
-	}
-	
+	protected int connPoolSize = DEF_POOL_SIZE;	
+	private boolean usePool = false; // true if connPoolSize > 0
 
-	private static MongoClient createMongoClient() throws UnknownHostException {
-		return new MongoClient(new ServerAddress(getHost(), getPort()), mongoClientOptions);
-		//return new MongoClient(getHost(), getPort());
-		
-		// fix: com.mongodb.MongoException$Network: can't call something
-		//m = new Mongo(new ServerAddress(getHost(), getPort()), mongoOptions); 
-	}
-*/
-	protected static JedisPool initPool(String host, int port) {
+	protected static JedisPool createPool(String host, int port, int maxConn) {
 		JedisPoolConfig config = new JedisPoolConfig();
-		//config.setMaxTotal(maxTotal); // maximum active connections
+		
+		// fix cannot get resource: http://fantaxy025025.iteye.com/blog/2340096
+		config.setTestOnBorrow(true);
+		config.setTestOnReturn(true);
+		
+		if(maxConn > 0) {
+			config.setMaxTotal(maxConn); // maximum active connections
+			config.setMaxIdle(3);
+		}
+		config.setMaxWaitMillis(5000);
+		
 		return new JedisPool(config, host, port);
 	}
-	
+
+	// use pool for singleton
+	/*
 	private static RedisAdapter instance = null;
 	public static RedisAdapter getInstance() {
 		if (instance == null) {
 			instance = new RedisAdapter();
+			instance.usePool = true;
 		}
 		return instance;
 	}
+	*/
 	
 	public RedisAdapter() {
-		this("", true);
 	}
 	
-	public RedisAdapter(String namespace, boolean autoClose) {
-		try {
-			this.namespace = namespace;
-			this.autoCloseConnection = autoClose;
-			// fix conn bug: if someone construct object but do nothing
-			//this.m = createMongoClient();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+	public RedisAdapter(String host, int port) {
+		this(host, port, DEF_POOL_SIZE);
 	}
-	
-	public RedisAdapter(String host, int port, String namespace, boolean autoClose, boolean usePool) {
+	public RedisAdapter(String host, int port, int connPoolSize) {
 		try {
 			this.host = host;
 			this.port = port;
-			this.namespace = namespace;
-			this.autoCloseConnection = autoClose;
-			this.useConnPool = usePool;
+			if(connPoolSize > 0) {
+				this.connPoolSize = connPoolSize;
+				this.usePool = true;
+			} else {
+				this.connPoolSize = -1;
+				this.usePool = false;
+			}
+			
 			// fix conn bug: if someone construct object but do nothing
 			//this.m = createMongoClient();
 			
-			if(usePool && jedis==null) {
+			if(jedis == null) {
 				//jedisPool = initPool(host, port);
 			}
 		} catch (Exception e) {
@@ -89,29 +75,39 @@ public class RedisAdapter {
 		}
 	}
 	
-	public String getHost() {
-		return this.host;
+	@Override
+	public void finalize() {
+		try{
+			super.finalize();
+			
+			System.out.println(this.getClass().getName() + " : finalize");
+			close();
+		} catch(Throwable t) {
+			t.printStackTrace();
+		}
 	}
-	public void setHost(String host) {
-		this.host = host;
-	}
-	public void setPort(int port) {
-		this.port = port;		
-	}
-	
 	
 	public Set<String> keys(String pattern) {
-		jedis = safeGetJedisClient();
-		
-		if(pattern == null || pattern.length()==0) {
-			pattern = "*";
+		try {
+			jedis = safeGetJedisClient();
+			
+			if(pattern == null || pattern.length()==0) {
+				pattern = "*";
+			}
+			Set<String> list = jedis.keys(pattern);
+			return list;
+		} finally {
+			closeResource();
 		}
-		Set<String> list = jedis.keys(pattern);
-		return list;
 	}
 	
 	public String flushAll() {
-		return jedis.flushAll();
+		try {
+			jedis = safeGetJedisClient();
+			return jedis.flushAll();
+		} finally {
+			closeResource();
+		}
 	}
 	
 	// ----------------------------------------------------
@@ -124,15 +120,19 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.set(key, value);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public String setExpiry(String key, String value, int expiryInSec) {
 		try {
 			jedis = safeGetJedisClient();
-			return jedis.setex(key, expiryInSec, value);
+			if(expiryInSec > 0) {
+				return jedis.setex(key, expiryInSec, value);
+			} else {
+				return jedis.set(key, value);
+			}
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	
@@ -141,7 +141,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.get(key);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public boolean exists(String key) {
@@ -149,7 +149,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.exists(key);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public long delete(String key) {
@@ -157,19 +157,20 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.del(key);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public long deleteBy(String keyPattern) {
 		long cnt = 0;
 		try {
 			Set<String> keys = keys(keyPattern);
+			jedis = safeGetJedisClient();
 			for (String key : keys) {
 			    jedis.del(key);
 			    ++cnt;
 			} 
 		} finally {
-			safeClose();
+			closeResource();
 		}
 		return cnt;
 	}
@@ -178,7 +179,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.incrBy(key, val);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public Long decr(String key, int val) {
@@ -186,7 +187,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.decrBy(key, val);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 
@@ -201,7 +202,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.lpush(key, value);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public Long rpush(String key, String value) {
@@ -209,7 +210,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.rpush(key, value);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public List<String> lrange(String key, int startIndex, int endIndex) {
@@ -218,7 +219,7 @@ public class RedisAdapter {
 			List<String> list = jedis.lrange(key, startIndex, endIndex);
 			return list;
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	
@@ -227,7 +228,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.lpop(key);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public String rpop(String key) {
@@ -235,7 +236,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.rpop(key);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public String ltrim(String key, long start, long end) {
@@ -243,7 +244,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.ltrim(key, start, end);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	
@@ -257,7 +258,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.hset(key, field, value);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	public String hget(String key, String field) {
@@ -265,7 +266,7 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.hget(key, field);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
 	
@@ -276,7 +277,7 @@ public class RedisAdapter {
 //			List<String> list = jedis.rrange(key, startIndex, endIndex);
 //			return list;
 //		} finally {
-//			safeClose();
+//			closeResource();
 //		}
 //	}
 	
@@ -290,54 +291,105 @@ public class RedisAdapter {
 			jedis = safeGetJedisClient();
 			return jedis.publish(channel, message);
 		} finally {
-			safeClose();
+			closeResource();
 		}
 	}
-
+	
+	// ----------------------------------------------------
+	//
+	//                    debug command
+	//
+	// ----------------------------------------------------
+	public String ping() {
+		try {
+			jedis = safeGetJedisClient();
+			return jedis.ping();
+		} finally {
+			closeResource();
+		}
+	}
+	public String clientList() {
+		try {
+			jedis = safeGetJedisClient();
+			return jedis.clientList();
+		} finally {
+			closeResource();
+		}
+	}
+	public String info() {
+		try {
+			jedis = safeGetJedisClient();
+			return jedis.info();
+		} finally {
+			closeResource();
+		}
+	}
+	
+	// ----------------------------------------------------
+	//
+	//                    config
+	//
+	// ----------------------------------------------------
+	public List<String> configGet(String pattern) {
+		try {
+			jedis = safeGetJedisClient();
+			return jedis.configGet(pattern);
+		} finally {
+			closeResource();
+		}
+	}
+	public String configSet(String parameter, String value) {
+		try {
+			jedis = safeGetJedisClient();
+			return jedis.configSet(parameter, value);
+		} finally {
+			closeResource();
+		}
+	}
 	
 	public void close() {
-		if(jedis != null) {
-			jedis.close();
-			jedis = null;
+		try {
+			closeResource();
+			
+			if(jedisPool != null) {
+				//jedisPool.returnResource(jedis);
+				//jedisPool.destroy(); // destroy keeps the connection open until timeout is reached.
+				jedisPool.close();
+				jedisPool = null;
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
 		}
 	}
 
-	private String nsKey(String key) {
-		if(namespace == null || namespace.length()==0) {
-			return key;
-		} else {
-			return namespace + ":" + key;
-		}
-	}
-	private void safeClose() {
-		if(jedis != null && this.autoCloseConnection) {
-			jedis.close();
-			jedis = null;
-		}
-	}
-	private Jedis safeGetJedisClient() {
-		if(jedis == null) {
-			jedis = cretaeJedisClient();
-		}
-		return jedis;
-	}
-	private Jedis cretaeJedisClient() {
+	private void closeResource() {
+		// Deprecated. starting from Jedis 3.0, using @see Jedis.close()
 		/*
-		if(namespace == null || namespace.length()==0) {			
-			return new NamespaceJedis(host);
-		} else {
-			return new NamespaceJedis(host);
+		if(jedisPool != null) {
+			jedisPool.returnResource(jedis);
 		}
 		*/
 		
-//		String sHost = String.format("%s:%d", host, port);
-		
-		if(jedisPool != null) {
-			return jedisPool.getResource();
-		} else {
-			return new Jedis(host);
-		}
+		if(jedis != null) {
+			jedis.close();
+			jedis = null;
+		}			
 	}
-	
-
+	private Jedis safeGetJedisClient() {
+		Jedis ret = null;
+		try {
+			if(usePool) {
+				if(jedisPool == null) {
+					jedisPool = createPool(host, port, connPoolSize);
+				}
+				ret = jedisPool.getResource();
+			} else {
+				ret = new Jedis(host, port);
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+			ret = new Jedis(host, port);
+		}
+		return ret;
+	}
 }

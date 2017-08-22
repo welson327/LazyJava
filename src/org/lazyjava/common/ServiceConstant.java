@@ -6,19 +6,6 @@ public class ServiceConstant {
 	
 	// top path
 	public static final String YIABI_DATA_TOP_PATH = "/lazyjava";
-	
-	// JservRoot, HtmlRoot
-	public static final String HOME_WEBUSER_PATH 	= "/home/webuser";
-	public static final String JSERV_ROOT 			= HOME_WEBUSER_PATH + "/JservRoot";
-	public static final String HTML_ROOT 			= HOME_WEBUSER_PATH + "/HtmlRoot";
-	
-	// sub folder
-	public static final String YIABI_BACKUP_DIR = YIABI_DATA_TOP_PATH + "/backup";
-	public static final String YIABI_ETC_DIR = YIABI_DATA_TOP_PATH + "/etc";
-	public static final String YIABI_WEBUSER_DIR = YIABI_DATA_TOP_PATH + "/webuser";
-	public static final String YIABI_SERVICE_DIR = YIABI_DATA_TOP_PATH + "/service";
-	public static final String YIABI_STATIC_DATA_DIR = YIABI_DATA_TOP_PATH + "/static_data";
-	public static final String YIABI_TMP_DIR = YIABI_DATA_TOP_PATH + "/temp";
 		
     // success/err
     public static final int SUCCESS           	= 200;

@@ -29,7 +29,7 @@ import com.mongodb.util.JSON;
 /*
  * Ref: https://docs.mongodb.com/ecosystem/drivers/java/
  */
-public class MongoAdapter implements IServiceDBAdapter {
+public class MongoAdapter {
 	// tag
 	protected final String _QUERYRESULT_ = "queryResult";
 	
